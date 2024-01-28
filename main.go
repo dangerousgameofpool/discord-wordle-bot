@@ -43,6 +43,7 @@ var (
 )
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Ignore messages created by the bot itself
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
@@ -55,16 +56,15 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, "There's already an active game running! Use `!end` to kill it and start anew.")
 			return
 		}
-
 		w = NewWordle(5)
 		gameStarted = true
 		s.ChannelMessageSend(m.ChannelID, "Wordle has started! Send a word preceded by `!guess` to play.")
 	}
 
+	// Commands for active game
 	if gameStarted {
 		if strings.HasPrefix(m.Content, "!guess") {
-			args := strings.Split(m.Content, " ")
-			w.processGuess(args[1])
+			w.processGuess(strings.Split(m.Content, " ")[1])
 			s.ChannelMessageSendEmbed(m.ChannelID, w.embedBoard())
 		}
 
@@ -73,6 +73,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("The answer is: ||%s||", w.Answer()))
 		}
 
+		// Sends a list of words the user has already guessed
 		if strings.HasPrefix(m.Content, "!history") {
 			s.ChannelMessageSend(m.ChannelID, w.History("\n"))
 		}
@@ -80,6 +81,15 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if strings.HasPrefix(m.Content, "!end") {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Thanks for playing! The answer was ||%s||", w.answer))
 			w.endGame()
+			gameStarted = false
+		}
+
+		if !w.play {
+			if w.isMatch {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Congrats! You guessed the answer in %d turns %s", w.turns, emoji.PartyPopper.String()))
+			} else {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("So close! The answer was **%s**.", w.answer))
+			}
 			gameStarted = false
 		}
 	}
@@ -116,7 +126,7 @@ func (w wordle) embedBoard() *discordgo.MessageEmbed {
 		Author:      &discordgo.MessageEmbedAuthor{},
 		Color:       0x6AAA64,
 		Description: w.board,
-		Title:       "Wordle",
+		Title:       fmt.Sprintf("Wordle (%d/6)", w.turns+1),
 	}
 	return &embed
 }
@@ -127,6 +137,14 @@ func (w wordle) Answer() string {
 }
 
 func (w *wordle) processGuess(g string) {
+	if !w.dict.Contains(g) {
+		return
+	}
+
+	if g == w.answer {
+		w.isMatch = true
+	}
+
 	clue := ""
 	for i := 0; i < len(g); i++ {
 		if g[i] == w.answer[i] {
@@ -137,14 +155,15 @@ func (w *wordle) processGuess(g string) {
 			clue += emoji.WhiteLargeSquare.String()
 		}
 	}
+
 	w.history = append(w.history, g)
 	clue += "\n"
+	w.turns++
 	w.updateBoard(clue)
-}
 
-// appendHistory appends a user's guess to a wordle's history slice.
-func (w *wordle) appendHistory(g string) {
-	w.history = append(w.history, g)
+	if w.turns >= 6 || w.isMatch {
+		w.endGame()
+	}
 }
 
 // History returns a string representation of a wordle's history slice.
@@ -154,7 +173,6 @@ func (w wordle) History(delimiter string) string {
 }
 
 func (w *wordle) updateBoard(s string) {
-	s += "\n"
 	w.board += s
 }
 
