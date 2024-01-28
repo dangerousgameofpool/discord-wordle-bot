@@ -65,8 +65,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		// TODO game board should be displayed via embed
 		if strings.HasPrefix(m.Content, "!guess") {
 			args := strings.Split(m.Content, " ")
-			s.ChannelMessageSend(m.ChannelID, w.processGuess(args[1]))
-			s.ChannelMessageSend(m.ChannelID, w.Answer())
+			w.processGuess(args[1])
+			s.ChannelMessageSendEmbed(m.ChannelID, w.embedBoard())
 		}
 
 		// TODO remove this later
@@ -76,11 +76,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		// TODO no response on this command atm, get it working
 		if strings.HasPrefix(m.Content, "!history") {
-			s.ChannelMessageSend(m.Content, w.History("\n"))
+			s.ChannelMessageSend(m.ChannelID, w.History("\n"))
 		}
 
 		if strings.HasPrefix(m.Content, "!end") {
-			s.ChannelMessageSend(m.Content, fmt.Sprintf("Thanks for playing! The answer was ||%s||", w.answer))
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Thanks for playing! The answer was ||%s||", w.answer))
+			w.endGame()
+			gameStarted = false
 		}
 	}
 }
@@ -104,11 +106,21 @@ func NewWordle(l int) wordle {
 		play:    true,
 		dict:    words.NewDictionary(l),
 	}
-
 	// Not sure if there's a more elegant way to do this
 	// syntactically. Putting it inside the struct wouldn't work.
 	w.answer = w.dict.RandomWord()
 	return w
+}
+
+// embedBoard returns a MessageEmbed containing a wordle's board string.
+func (w wordle) embedBoard() *discordgo.MessageEmbed {
+	embed := discordgo.MessageEmbed{
+		Author:      &discordgo.MessageEmbedAuthor{},
+		Color:       0x6AAA64,
+		Description: w.board,
+		Title:       "Wordle",
+	}
+	return &embed
 }
 
 // Answer returns the string held by a wordle's answer field.
@@ -116,7 +128,7 @@ func (w wordle) Answer() string {
 	return w.answer
 }
 
-func (w *wordle) processGuess(g string) string {
+func (w *wordle) processGuess(g string) {
 	clue := ""
 	for i := 0; i < len(g); i++ {
 		if g[i] == w.answer[i] {
@@ -127,10 +139,9 @@ func (w *wordle) processGuess(g string) string {
 			clue += emoji.WhiteLargeSquare.String()
 		}
 	}
-	w.history = append(w.history, clue)
+	w.history = append(w.history, g)
 	clue += "\n"
 	w.updateBoard(clue)
-	return w.board
 }
 
 // appendHistory appends a user's guess to a wordle's history slice.
