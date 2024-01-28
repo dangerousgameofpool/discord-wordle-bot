@@ -62,7 +62,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if gameStarted {
-		// TODO game board should be displayed via embed
 		if strings.HasPrefix(m.Content, "!guess") {
 			args := strings.Split(m.Content, " ")
 			w.processGuess(args[1])
@@ -74,7 +73,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("The answer is: ||%s||", w.Answer()))
 		}
 
-		// TODO no response on this command atm, get it working
 		if strings.HasPrefix(m.Content, "!history") {
 			s.ChannelMessageSend(m.ChannelID, w.History("\n"))
 		}
