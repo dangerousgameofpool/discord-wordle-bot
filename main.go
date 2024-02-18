@@ -53,12 +53,18 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// TODO support custom word length
 	if strings.HasPrefix(m.Content, "!play") {
 		if gameStarted {
-			s.ChannelMessageSend(m.ChannelID, "There's already an active game running! Use `!end` to kill it and start anew.")
+			s.ChannelMessageSend(
+				m.ChannelID,
+				"There's already an active game running! Use `!end` to kill it and start anew.",
+			)
 			return
 		}
 		w = NewWordle(5)
 		gameStarted = true
-		s.ChannelMessageSend(m.ChannelID, "Wordle has started! Send a word preceded by `!guess` to play.")
+		s.ChannelMessageSend(
+			m.ChannelID,
+			"Wordle has started! Send a word preceded by `!guess` to play.",
+		)
 	}
 
 	// Commands for active game
@@ -73,20 +79,34 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("The answer is: ||%s||", w.Answer()))
 		}
 
+		if strings.HasPrefix(m.Content, "!turn") {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%d/6", w.turns+1))
+		}
+
 		// Sends a list of words the user has already guessed
 		if strings.HasPrefix(m.Content, "!history") {
 			s.ChannelMessageSend(m.ChannelID, w.History("\n"))
 		}
 
 		if strings.HasPrefix(m.Content, "!end") {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Thanks for playing! The answer was ||%s||", w.answer))
+			s.ChannelMessageSend(
+				m.ChannelID,
+				fmt.Sprintf("Thanks for playing! The answer was **%s**", w.answer),
+			)
 			w.endGame()
 			gameStarted = false
 		}
 
 		if !w.play {
 			if w.isMatch {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Congrats! You guessed the answer in %d turns %s", w.turns, emoji.PartyPopper.String()))
+				s.ChannelMessageSend(
+					m.ChannelID,
+					fmt.Sprintf(
+						"Congrats! You guessed the answer in %d turns %s",
+						w.turns,
+						emoji.PartyPopper.String(),
+					),
+				)
 			} else {
 				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("So close! The answer was **%s**.", w.answer))
 			}
@@ -97,13 +117,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 // A wordle represents a wordle puzzle.
 type wordle struct {
-	board   string           // Shows the current state of the wordle game
-	turns   int              // Tracks the number of turns that have passed.
-	isMatch bool             // Checks if the user's guess is a match to answer
-	play    bool             // Controls if the game continues or ends
-	dict    words.Dictionary // Keeps a wordle's available wordlist and gives random words
-	answer  string           // The answer to a wordle puzzle.
-	history []string         // Keeps a history of the player's guesses
+	board   string                // Shows the current state of the wordle game
+	turns   int                   // Tracks the number of turns that have passed.
+	isMatch bool                  // Checks if the user's guess is a match to answer
+	play    bool                  // Controls if the game continues or ends
+	dict    dictionary.Dictionary // Keeps a wordle's available wordlist and gives random words
+	answer  string                // The answer to a wordle puzzle.
+	history []string              // Keeps a history of the player's guesses
+	letters map[string]bool
 }
 
 // NewWordle creates and returns a new wordle struct.
@@ -112,7 +133,7 @@ func NewWordle(l int) wordle {
 		turns:   0,
 		isMatch: false,
 		play:    true,
-		dict:    words.NewDictionary(l),
+		dict:    dictionary.NewDictionary(l),
 	}
 	// Not sure if there's a more elegant way to do this
 	// syntactically. Putting it inside the struct wouldn't work.
@@ -126,7 +147,7 @@ func (w wordle) embedBoard() *discordgo.MessageEmbed {
 		Author:      &discordgo.MessageEmbedAuthor{},
 		Color:       0x6AAA64,
 		Description: w.board,
-		Title:       fmt.Sprintf("Wordle (%d/6)", w.turns+1),
+		Title:       "Wordle",
 	}
 	return &embed
 }
@@ -157,9 +178,8 @@ func (w *wordle) processGuess(g string) {
 	}
 
 	w.history = append(w.history, g)
-	clue += "\n"
 	w.turns++
-	w.updateBoard(clue)
+	w.updateBoard(clue + "\n")
 
 	if w.turns >= 6 || w.isMatch {
 		w.endGame()
