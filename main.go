@@ -8,33 +8,43 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/dangerousgameofpool/discord-wordle-bot/words"
+	words "github.com/dangerousgameofpool/discord-wordle-bot/words"
 	"github.com/enescakir/emoji"
 	"github.com/joho/godotenv"
 )
 
-func main() {
-	botToken := envLoad()
-	discord, err := discordgo.New("Bot " + botToken)
+var session *discordgo.Session
+
+func init() {
+	godotenv.Load()
+	token := os.Getenv("BOT_TOKEN")
+
+	// If there's any errors getting the bot token or creating the session, fail and exit the program as soon as possible
+	var err error
+	session, err = discordgo.New(fmt.Sprintf("Bot %s", token))
 	if err != nil {
-		log.Fatal("Error creating Discord session")
-		return
+		log.Fatalf("Error creating Discord session %v", err)
 	}
+}
 
-	discord.AddHandler(messageCreate)
-	discord.Open()
+// var (
+// 	slash_commands = []*discordgo.ApplicationCommand{
+// 		{
+// 			Name:        "ping",
+// 			Description: "Sends back ping or pong",
+// 		},
+// 	}
+// )
 
-	fmt.Println("Bot is online!")
+func main() {
+	session.AddHandler(messageCreate)
+	session.Open()
+	fmt.Println("Bot is running!")
+
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, os.Interrupt)
 	<-sc
-
-	discord.Close()
-}
-
-func envLoad() string {
-	godotenv.Load()
-	return os.Getenv("BOT_TOKEN")
+	defer session.Close()
 }
 
 var (
@@ -83,6 +93,10 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("%d/6", w.turns+1))
 		}
 
+		if strings.HasPrefix(m.Content, "!letters") {
+			s.ChannelMessageSend(m.ChannelID, "Placeholder!")
+		}
+
 		// Sends a list of words the user has already guessed
 		if strings.HasPrefix(m.Content, "!history") {
 			s.ChannelMessageSend(m.ChannelID, w.History("\n"))
@@ -117,13 +131,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 // A wordle represents a wordle puzzle.
 type wordle struct {
-	board   string                // Shows the current state of the wordle game
-	turns   int                   // Tracks the number of turns that have passed.
-	isMatch bool                  // Checks if the user's guess is a match to answer
-	play    bool                  // Controls if the game continues or ends
-	dict    dictionary.Dictionary // Keeps a wordle's available wordlist and gives random words
-	answer  string                // The answer to a wordle puzzle.
-	history []string              // Keeps a history of the player's guesses
+	board   string           // Shows the current state of the wordle game
+	turns   int              // Tracks the number of turns that have passed.
+	isMatch bool             // Checks if the user's guess is a match to answer
+	play    bool             // Controls if the game continues or ends
+	dict    words.Dictionary // Keeps a wordle's available wordlist and gives random words
+	answer  string           // The answer to a wordle puzzle.
+	history []string         // Keeps a history of the player's guesses
 	letters map[string]bool
 }
 
@@ -133,7 +147,7 @@ func NewWordle(l int) wordle {
 		turns:   0,
 		isMatch: false,
 		play:    true,
-		dict:    dictionary.NewDictionary(l),
+		dict:    words.NewDictionary(l),
 	}
 	// Not sure if there's a more elegant way to do this
 	// syntactically. Putting it inside the struct wouldn't work.
@@ -141,7 +155,7 @@ func NewWordle(l int) wordle {
 	return w
 }
 
-// embedBoard returns a MessageEmbed containing a wordle's board string.
+// embedBoard returns a *MessageEmbed containing a wordle's board string.
 func (w wordle) embedBoard() *discordgo.MessageEmbed {
 	embed := discordgo.MessageEmbed{
 		Author:      &discordgo.MessageEmbedAuthor{},
@@ -192,6 +206,7 @@ func (w wordle) History(delimiter string) string {
 	return strings.Join(w.history, delimiter)
 }
 
+// updateBoard adds a string s to a wordle's board string.
 func (w *wordle) updateBoard(s string) {
 	w.board += s
 }
